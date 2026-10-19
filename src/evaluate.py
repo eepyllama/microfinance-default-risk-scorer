@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
-from sklearn.calibration import CalibratedClassifierCV, calibration_curve
+from sklearn.calibration import calibration_curve
+from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
@@ -140,6 +141,32 @@ def plot_calibration(model_name: str, model, X_cal, y_cal) -> Path:
     return path
 
 
+# ── Pre-fit calibration wrapper ──────────────────────────────────────────────
+
+class _IsotonicCalibratedModel:
+    """Wraps a pre-fitted classifier with an isotonic-regression probability calibrator.
+
+    sklearn removed cv='prefit' from CalibratedClassifierCV in 1.6; this
+    class replicates the same behaviour without relying on that API.
+    """
+    def __init__(self, clf, iso: IsotonicRegression):
+        self.clf = clf
+        self.iso = iso
+
+    def predict_proba(self, X) -> np.ndarray:
+        raw = self.clf.predict_proba(X)[:, 1]
+        cal = self.iso.predict(raw)
+        return np.column_stack([1 - cal, cal])
+
+    def predict(self, X) -> np.ndarray:
+        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+
+    # Expose clf internals so explain.py can unwrap the base estimator
+    @property
+    def calibrated_classifiers_(self):
+        return [type('_C', (), {'estimator': self.clf})()]
+
+
 # ── Main evaluation ───────────────────────────────────────────────────────────
 
 def evaluate_all() -> dict:
@@ -199,12 +226,16 @@ def evaluate_all() -> dict:
     best_model = results[best_name]['model']
     plot_calibration(best_name, best_model, X_test, y_test)
 
-    # Calibrate best model with isotonic regression
-    # Isotonic regression chosen over Platt scaling because tree-based models
-    # produce sigmoid-shaped miscalibration that isotonic handles better.
+    # Calibrate best model with isotonic regression.
+    # sklearn removed cv='prefit' in 1.6; we use IsotonicRegression directly
+    # on the validation-set scores, then wrap it in a lightweight class.
+    # Isotonic preferred over Platt: tree models have non-monotone miscalibration
+    # that isotonic handles without assuming a sigmoid shape.
     print(f"\nCalibrating {best_name} with isotonic regression …")
-    calibrated = CalibratedClassifierCV(best_model, cv='prefit', method='isotonic')
-    calibrated.fit(X_val, y_val)
+    val_prob_raw = best_model.predict_proba(X_val)[:, 1]
+    iso = IsotonicRegression(out_of_bounds='clip')
+    iso.fit(val_prob_raw, y_val)
+    calibrated = _IsotonicCalibratedModel(best_model, iso)
 
     cal_prob = calibrated.predict_proba(X_test)[:, 1]
     cal_auc = roc_auc_score(y_test, cal_prob)
