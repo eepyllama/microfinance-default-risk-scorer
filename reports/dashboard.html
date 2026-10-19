@@ -1,0 +1,602 @@
+<title>ML Risk Scorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+/* ── Token system: deep slate + amber accent for a data-finance aesthetic ── */
+:root {
+  --bg:           #f0f2f5;
+  --surface:      #ffffff;
+  --surface-2:    #e8ebf0;
+  --fg:           #1a1f2e;
+  --fg-mid:       #4a5268;
+  --fg-muted:     #8a90a0;
+  --accent:       #e8922a;
+  --accent-soft:  #e8922a1a;
+  --done:         #1d9f6e;
+  --done-soft:    #1d9f6e18;
+  --next:         #3b6fff;
+  --next-soft:    #3b6fff18;
+  --warn:         #e8922a;
+  --border:       #d8dce6;
+  --mono:         'IBM Plex Mono', 'Courier New', monospace;
+  --sans:         'IBM Plex Sans', system-ui, sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:           #0e111a;
+    --surface:      #161b28;
+    --surface-2:    #1e2538;
+    --fg:           #e8ecf5;
+    --fg-mid:       #9ba3bc;
+    --fg-muted:     #5a6280;
+    --accent:       #f0a44a;
+    --accent-soft:  #f0a44a1a;
+    --done:         #2bbf85;
+    --done-soft:    #2bbf8518;
+    --next:         #6b8fff;
+    --next-soft:    #6b8fff18;
+    --border:       #262d42;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:           #0e111a;
+  --surface:      #161b28;
+  --surface-2:    #1e2538;
+  --fg:           #e8ecf5;
+  --fg-mid:       #9ba3bc;
+  --fg-muted:     #5a6280;
+  --accent:       #f0a44a;
+  --accent-soft:  #f0a44a1a;
+  --done:         #2bbf85;
+  --done-soft:    #2bbf8518;
+  --next:         #6b8fff;
+  --next-soft:    #6b8fff18;
+  --border:       #262d42;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px;
+  min-height: 100%;
+}
+
+/* ── Top bar ── */
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.topbar-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--fg);
+  text-wrap: balance;
+}
+.subtitle {
+  font-size: 13px;
+  color: var(--fg-mid);
+  margin-top: 2px;
+}
+.badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+.badge-done  { background: var(--done-soft);  color: var(--done); }
+.badge-next  { background: var(--next-soft);  color: var(--next); }
+.badge-warn  { background: var(--accent-soft); color: var(--accent); }
+
+/* ── Progress bar ── */
+.progress-wrap { margin-bottom: 28px; }
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.progress-label span:first-child {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-mid);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.progress-label span:last-child {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--done);
+}
+.progress-track {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 10%;
+  background: linear-gradient(90deg, var(--done), #56d9a8);
+  border-radius: 99px;
+  transition: width .5s ease;
+}
+
+/* ── Grid ── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+.card-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* ── Phase list ── */
+.phase-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.phase-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.phase-item:last-child { border-bottom: none; }
+
+.phase-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.icon-done  { background: var(--done-soft);  color: var(--done); border: 1.5px solid var(--done); }
+.icon-next  { background: var(--next-soft);  color: var(--next); border: 1.5px solid var(--next); }
+.icon-plan  { background: var(--accent-soft); color: var(--accent); border: 1.5px solid var(--accent); }
+.icon-pend  { background: var(--surface-2);  color: var(--fg-muted); border: 1.5px solid var(--border); }
+
+.phase-body { flex: 1; min-width: 0; }
+.phase-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+}
+.phase-item.done .phase-name { color: var(--fg-mid); }
+.phase-desc {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.phase-tag {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  margin-top: 4px;
+  display: inline-block;
+}
+.tag-done   { background: var(--done-soft);  color: var(--done); }
+.tag-next   { background: var(--next-soft);  color: var(--next); }
+.tag-plan   { background: var(--accent-soft); color: var(--accent); }
+.tag-pend   { background: var(--surface-2);  color: var(--fg-muted); }
+
+/* ── Config table ── */
+.kv-list { display: flex; flex-direction: column; gap: 0; }
+.kv-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.kv-row:last-child { border-bottom: none; }
+.kv-key {
+  font-size: 12px;
+  color: var(--fg-mid);
+  flex-shrink: 0;
+}
+.kv-val {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.kv-note {
+  font-size: 10px;
+  color: var(--fg-muted);
+  font-style: italic;
+  margin-top: 1px;
+  text-align: right;
+}
+
+/* ── Rule flags ── */
+.flags { display: flex; flex-direction: column; gap: 8px; }
+.flag {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+.flag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.dot-red    { background: #e05252; }
+.dot-amber  { background: var(--accent); }
+.dot-blue   { background: var(--next); }
+.flag-text  { font-size: 12px; color: var(--fg-mid); line-height: 1.4; }
+.flag-text strong { color: var(--fg); font-weight: 600; }
+
+/* ── Next steps card ── */
+.next-card {
+  background: var(--next-soft);
+  border: 1.5px solid var(--next);
+  border-radius: 12px;
+  padding: 18px;
+  margin-top: 16px;
+}
+.next-card .card-title { color: var(--next); }
+.task-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.task {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--fg);
+}
+.task::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--next);
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  background: var(--surface);
+}
+
+/* ── Env stat strip ── */
+.stat-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.stat-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 5px 10px;
+  background: var(--surface-2);
+  border-radius: 6px;
+  color: var(--fg-mid);
+}
+.stat-chip .chip-key { color: var(--fg-muted); }
+.stat-chip .chip-val { color: var(--fg); font-weight: 600; }
+
+.section-gap { margin-top: 16px; }
+</style>
+
+<!-- ── Top bar ── -->
+<div class="topbar">
+  <div class="topbar-title">
+    <span class="eyebrow">Home Credit Default Risk</span>
+    <h1>Microfinance Risk Scorer</h1>
+    <p class="subtitle">Classical ML · SHAP explanations · Fairness audit · Profit thresholding</p>
+  </div>
+  <span class="badge badge-done">All phases ✓ complete</span>
+</div>
+
+<!-- ── Overall progress ── -->
+<div class="progress-wrap">
+  <div class="progress-label">
+    <span>Build progress</span>
+    <span>10 / 10 phases</span>
+  </div>
+  <div class="progress-track">
+    <div class="progress-fill" id="prog"></div>
+  </div>
+</div>
+
+<!-- ── Main 2-col grid ── -->
+<div class="grid-2">
+
+  <!-- Phase timeline -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Phases</span>
+    </div>
+    <div class="phase-list">
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">0 — Scaffold</div>
+          <div class="phase-desc">Folder structure, config, requirements, smoke tests</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">1 — Data &amp; EDA</div>
+          <div class="phase-desc">src/data.py loader · stratified --sample · notebooks/01_eda.ipynb</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">2 — Feature Engineering</div>
+          <div class="phase-desc">Installment · bureau · ratios · simulated groups · leakage tests</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">3 — Baseline &amp; Models</div>
+          <div class="phase-desc">LR / RF / LightGBM · 5-fold CV · model_comparison.csv</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">4 — Evaluation &amp; Calibration</div>
+          <div class="phase-desc">ROC/PR/KS · isotonic calibration · confusion thresholds</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">5 — Explainability</div>
+          <div class="phase-desc">SHAP global summary · explain(row) top-5 reasons · waterfall</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">6 — Fairness Audit</div>
+          <div class="phase-desc">MetricFrame · parity diff · proxy test · ThresholdOptimizer</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">7 — Profit Simulation</div>
+          <div class="phase-desc">Expected profit curve · optimal threshold · ASSUMPTION labels</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">8 — Streamlit Demo</div>
+          <div class="phase-desc">Score · fairness dashboard · profit slider (3 tabs)</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+      <div class="phase-item done">
+        <div class="phase-icon icon-done">✓</div>
+        <div class="phase-body">
+          <div class="phase-name">9 — Report &amp; Presentation</div>
+          <div class="phase-desc">README with full reproduction steps · caveats documented</div>
+          <span class="phase-tag tag-done">complete</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Config snapshot -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">src/config.py</span>
+        <span class="badge badge-done" style="font-size:10px;padding:2px 8px;">loaded</span>
+      </div>
+      <div class="kv-list">
+        <div class="kv-row">
+          <span class="kv-key">RANDOM_SEED</span>
+          <div><div class="kv-val">42</div></div>
+        </div>
+        <div class="kv-row">
+          <span class="kv-key">Train / Val / Test</span>
+          <div><div class="kv-val">70 / 15 / 15 %</div></div>
+        </div>
+        <div class="kv-row">
+          <span class="kv-key">SAMPLE_FRAC (--sample)</span>
+          <div><div class="kv-val">10 %</div></div>
+        </div>
+        <div class="kv-row">
+          <span class="kv-key">Interest rate</span>
+          <div>
+            <div class="kv-val">20 %</div>
+            <div class="kv-note">ASSUMPTION</div>
+          </div>
+        </div>
+        <div class="kv-row">
+          <span class="kv-key">Loss given default</span>
+          <div>
+            <div class="kv-val">75 %</div>
+            <div class="kv-note">ASSUMPTION</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Env chips -->
+      <div class="stat-strip">
+        <div class="stat-chip">
+          <span class="chip-key">py</span>
+          <span class="chip-val">3.13</span>
+        </div>
+        <div class="stat-chip">
+          <span class="chip-key">sklearn</span>
+          <span class="chip-val">1.9.1</span>
+        </div>
+        <div class="stat-chip">
+          <span class="chip-key">lgbm</span>
+          <span class="chip-val">4.7.0</span>
+        </div>
+        <div class="stat-chip">
+          <span class="chip-key">shap</span>
+          <span class="chip-val">0.54.1</span>
+        </div>
+        <div class="stat-chip">
+          <span class="chip-key">pytest</span>
+          <span class="chip-val">40 / 40 ✓</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rules & flags -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Active rules</span>
+      </div>
+      <div class="flags">
+        <div class="flag">
+          <div class="flag-dot dot-red"></div>
+          <div class="flag-text"><strong>No leakage.</strong> A borrower's own target must never feed into any feature, including group averages. Pytest leakage test required in Phase 2.</div>
+        </div>
+        <div class="flag">
+          <div class="flag-dot dot-amber"></div>
+          <div class="flag-text"><strong>Simulated groups.</strong> Group-lending features are synthetic — must be labelled as simulated in code, plots, and report.</div>
+        </div>
+        <div class="flag">
+          <div class="flag-dot dot-amber"></div>
+          <div class="flag-text"><strong>Profit = assumptions.</strong> interest_rate and loss_given_default live in config only; never treated as empirical.</div>
+        </div>
+        <div class="flag">
+          <div class="flag-dot dot-blue"></div>
+          <div class="flag-text"><strong>Phases 2 &amp; 6:</strong> propose a plan and wait for approval before writing any code.</div>
+        </div>
+        <div class="flag">
+          <div class="flag-dot dot-blue"></div>
+          <div class="flag-text"><strong>Develop on 10 % sample</strong> (<code>--sample</code> flag), then run full data.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Next-up card ── -->
+<div class="next-card section-gap" style="background:var(--done-soft);border-color:var(--done);">
+  <div class="card-title" style="color:var(--done);font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;">
+    All phases complete — ready to run on real data
+  </div>
+  <div class="task-list">
+    <div class="task" style="opacity:.7;">Download Kaggle data → <code>data/raw/</code></div>
+    <div class="task" style="opacity:.7;"><code>python -m src.features</code> → features.parquet</div>
+    <div class="task" style="opacity:.7;"><code>python -m src.train</code> → models/*.joblib</div>
+    <div class="task" style="opacity:.7;"><code>python -m src.evaluate</code> → calibration + figures</div>
+    <div class="task" style="opacity:.7;"><code>python -m src.explain</code> → SHAP plots</div>
+    <div class="task" style="opacity:.7;"><code>python -m src.fairness</code> → audit + mitigation</div>
+    <div class="task" style="opacity:.7;"><code>python -m src.profit</code> → profit curve</div>
+    <div class="task" style="opacity:.7;"><code>streamlit run app/streamlit_app.py</code></div>
+  </div>
+</div>
+
+<script>
+  // Animate progress bar on load
+  document.addEventListener('DOMContentLoaded', () => {
+    const fill = document.getElementById('prog');
+    // 10 of 10 phases = 100%
+    requestAnimationFrame(() => { fill.style.width = '100%'; });
+  });
+</script>
