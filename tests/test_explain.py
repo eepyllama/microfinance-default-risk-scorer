@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 
 from src.train import NUMERIC_FEATURES
 from src.explain import FEATURE_LABELS, explain
-from src.evaluate import _IsotonicCalibratedModel
+from src.train import IsotonicCalibratedModel as _IsotonicCalibratedModel
 
 
 # ── Synthetic fixtures ────────────────────────────────────────────────────────

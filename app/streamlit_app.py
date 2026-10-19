@@ -28,7 +28,7 @@ import streamlit as st
 from src.config import MODELS_DIR, REPORTS_DIR, FIGURES_DIR, PROFIT_CONFIG
 from src.train import NUMERIC_FEATURES
 from src.explain import explain, FEATURE_LABELS, waterfall_plot
-from src.profit import profit_curve, approve_all_profit, optimal_threshold
+from src.profit import profit_curve, approve_all_profit, optimal_threshold, expected_profit_per_applicant
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(

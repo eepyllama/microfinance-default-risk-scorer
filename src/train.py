@@ -18,6 +18,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
@@ -32,6 +33,41 @@ from src.config import (
 from src.features import build_all
 
 warnings.filterwarnings("ignore", category=UserWarning)
+
+
+# ── Calibration wrapper (defined here so joblib stores the stable module path) ─
+
+class IsotonicCalibratedModel:
+    """Wraps a pre-fitted classifier with isotonic-regression probability calibration.
+
+    Defined in src.train (not src.evaluate) so joblib serialises the class as
+    'src.train.IsotonicCalibratedModel' — a stable path importable from any module.
+    """
+    def __init__(self, clf, iso: IsotonicRegression):
+        self.clf = clf
+        self.iso = iso
+
+    def predict_proba(self, X) -> np.ndarray:
+        raw = self.clf.predict_proba(X)[:, 1]
+        cal = self.iso.predict(raw)
+        return np.column_stack([1 - cal, cal])
+
+    def predict(self, X) -> np.ndarray:
+        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+
+    @property
+    def calibrated_classifiers_(self):
+        # Lets explain.py unwrap the base estimator for SHAP
+        return [type('_C', (), {'estimator': self.clf})()]
+
+    # sklearn clone() compatibility — required by ThresholdOptimizer
+    def get_params(self, deep=True):
+        return {'clf': self.clf, 'iso': self.iso}
+
+    def set_params(self, **params):
+        for k, v in params.items():
+            setattr(self, k, v)
+        return self
 
 
 # ── Column definitions ────────────────────────────────────────────────────────

@@ -1,0 +1,4 @@
+model,optimal_threshold,optimal_profit
+Base model,0.18,0.125471
+Fair model,0.18,0.125471
+Approve all,0.0,0.12330305461009822

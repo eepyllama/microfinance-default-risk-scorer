@@ -30,6 +30,7 @@ from sklearn.metrics import (
 )
 
 from src.config import FIGURES_DIR, MODELS_DIR, REPORTS_DIR, RANDOM_SEED
+from src.train import IsotonicCalibratedModel
 
 warnings.filterwarnings("ignore")
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
@@ -141,32 +142,6 @@ def plot_calibration(model_name: str, model, X_cal, y_cal) -> Path:
     return path
 
 
-# ── Pre-fit calibration wrapper ──────────────────────────────────────────────
-
-class _IsotonicCalibratedModel:
-    """Wraps a pre-fitted classifier with an isotonic-regression probability calibrator.
-
-    sklearn removed cv='prefit' from CalibratedClassifierCV in 1.6; this
-    class replicates the same behaviour without relying on that API.
-    """
-    def __init__(self, clf, iso: IsotonicRegression):
-        self.clf = clf
-        self.iso = iso
-
-    def predict_proba(self, X) -> np.ndarray:
-        raw = self.clf.predict_proba(X)[:, 1]
-        cal = self.iso.predict(raw)
-        return np.column_stack([1 - cal, cal])
-
-    def predict(self, X) -> np.ndarray:
-        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
-
-    # Expose clf internals so explain.py can unwrap the base estimator
-    @property
-    def calibrated_classifiers_(self):
-        return [type('_C', (), {'estimator': self.clf})()]
-
-
 # ── Main evaluation ───────────────────────────────────────────────────────────
 
 def evaluate_all() -> dict:
@@ -235,7 +210,7 @@ def evaluate_all() -> dict:
     val_prob_raw = best_model.predict_proba(X_val)[:, 1]
     iso = IsotonicRegression(out_of_bounds='clip')
     iso.fit(val_prob_raw, y_val)
-    calibrated = _IsotonicCalibratedModel(best_model, iso)
+    calibrated = IsotonicCalibratedModel(best_model, iso)
 
     cal_prob = calibrated.predict_proba(X_test)[:, 1]
     cal_auc = roc_auc_score(y_test, cal_prob)

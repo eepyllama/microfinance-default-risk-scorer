@@ -1,0 +1,15 @@
+{
+  "CODE_GENDER": {
+    "demographic_parity_diff": 0.0008,
+    "equalized_odds_diff": 0.0052,
+    "adverse_impact_ratio": 0.0
+  },
+  "age_bucket": {
+    "demographic_parity_diff": 0.0012,
+    "equalized_odds_diff": 0.0056,
+    "adverse_impact_ratio": 0.1923
+  },
+  "proxy_test": {
+    "proxy_gender_auc": 0.6678
+  }
+}

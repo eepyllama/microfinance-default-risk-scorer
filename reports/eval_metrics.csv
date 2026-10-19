@@ -1,0 +1,4 @@
+model,val_roc_auc,val_pr_auc,val_ks,test_roc_auc,test_pr_auc,test_ks
+logistic_regression,0.6719,0.1534,0.2593,0.6697,0.1549,0.2549
+random_forest,0.6825,0.1645,0.2686,0.6792,0.1668,0.2615
+lightgbm,0.6872,0.172,0.2785,0.6883,0.1788,0.2694

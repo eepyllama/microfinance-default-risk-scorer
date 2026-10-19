@@ -194,12 +194,14 @@ def mitigate(model, X_train: pd.DataFrame, y_train: pd.Series,
     group-specific thresholds that satisfy the fairness constraint with
     minimal accuracy loss.  It requires access to the training labels.
     """
+    # ThresholdOptimizer clones+refits the estimator, so we give it the underlying
+    # base model (LightGBM), not the calibrated wrapper which has no fit().
+    base_estimator = model.clf if hasattr(model, 'clf') else model
     optimizer = ThresholdOptimizer(
-        estimator=model,
+        estimator=base_estimator,
         constraints='demographic_parity',
         objective='balanced_accuracy_score',
         predict_method='predict_proba',
-        random_state=RANDOM_SEED,
     )
     sf_train = sensitive_train.fillna('Unknown')
     optimizer.fit(X_train, y_train, sensitive_features=sf_train)

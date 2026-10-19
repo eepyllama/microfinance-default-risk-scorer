@@ -27,12 +27,13 @@ def _read(name: str) -> pd.DataFrame:
 
 
 def _stratified_sample(df: pd.DataFrame, target_col: str = "TARGET") -> pd.DataFrame:
-    # Sample each class separately so the default rate is preserved
-    return (
-        df.groupby(target_col, group_keys=False)
-          .apply(lambda g: g.sample(frac=SAMPLE_FRAC, random_state=RANDOM_SEED))
-          .reset_index(drop=True)
+    # Use sklearn train_test_split instead of groupby().apply(): pandas 3.x drops
+    # the groupby key column inside apply(), losing TARGET from the result.
+    from sklearn.model_selection import train_test_split
+    _, sampled = train_test_split(
+        df, test_size=SAMPLE_FRAC, stratify=df[target_col], random_state=RANDOM_SEED
     )
+    return sampled.reset_index(drop=True)
 
 
 # ── Primary tables ───────────────────────────────────────────────────────────
