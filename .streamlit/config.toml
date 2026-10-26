@@ -1,0 +1,8 @@
+# Only the accent colour and font are set, so the app still follows the
+# viewer's light/dark preference.
+[theme]
+primaryColor = "#3b6fff"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
